@@ -50,7 +50,8 @@ Implementei uma classe de tratamento de exceções (GlobalExceptionHandler) com 
 
 ### Pré-requisitos
 - JDK 25 instalado
-- Uma chave da API da OpenAI (OPENAI_API_KEY)
+- Docker Desktop (opcional, para inicialização automática do MySQL via Docker Compose)
+- Chave da API da OpenAI (OPENAI_API_KEY)
 
 ### Execução
 
@@ -69,12 +70,7 @@ Implementei uma classe de tratamento de exceções (GlobalExceptionHandler) com 
      set OPENAI_API_KEY=sua-chave-aqui
      ```
 
-2. Execute os testes para validar o projeto:
-   ```bash
-   ./gradlew test
-   ```
-
-3. Inicie o servidor:
+2. Inicie a aplicação:
    ```bash
    ./gradlew bootRun
    ```
@@ -83,37 +79,37 @@ Implementei uma classe de tratamento de exceções (GlobalExceptionHandler) com 
 
 ## 5. Como testar o fluxo principal
 
-### Teste por áudio (Interação multimodal)
-Envie um arquivo de áudio para o endpoint de IA:
+A forma mais recomendada, rápida e confiável de validar o funcionamento da aplicação e de todas as regras implementadas é através da suíte de testes automatizados:
+
+### Executando os testes automatizados
+No terminal do projeto, execute:
 
 ```bash
-curl -X POST "http://localhost:8080/transactions/ai" \
-  -H "accept: audio/mp3" \
-  -H "Content-Type: multipart/form-data" \
-  -F "file=@src/test/resources/audio/recording-1.m4a" \
-  --output resposta.mp3
+./gradlew test
 ```
 
-O arquivo resposta.mp3 conterá a fala da assistente respondendo ao comando do áudio.
+Os testes automatizados cobrem:
+- Cálculo e soma de gastos por categoria (`GetTotalSpentByCategoryUseCaseTest`).
+- Cálculo e filtro temporal de despesas por mês e ano (`GetTotalSpentByMonthUseCaseTest`).
+- Tratamento global de exceções e formato de respostas de erro HTTP (`GlobalExceptionHandlerTest`).
 
-### Testes via endpoints REST
-Você também pode interagir diretamente via REST para validar os dados:
+Dessa forma, toda a lógica de negócio e as ferramentas expostas para a IA são testadas de forma determinística e independente de saldo de APIs externas.
 
-- Registrar despesa:
+### Testes opcionais de integração ao vivo
+Com a aplicação em execução e uma chave ativa com créditos na OpenAI, também é possível testar o endpoint de voz e os endpoints REST:
+
+- Teste por áudio (envio de gravação):
   ```bash
-  curl -X POST "http://localhost:8080/transactions" \
-    -H "Content-Type: application/json" \
-    -d '{"description": "Mercado", "category": "GROCERIES", "amount": 15000}'
+  curl -X POST "http://localhost:8080/transactions/ai" \
+    -H "accept: audio/mp3" \
+    -H "Content-Type: multipart/form-data" \
+    -F "file=@src/test/resources/audio/recording-1.m4a" \
+    --output resposta.mp3
   ```
 
-- Consultar total por categoria:
+- Consulta de total por categoria via REST:
   ```bash
   curl -X GET "http://localhost:8080/transactions/total/category/GROCERIES"
-  ```
-
-- Consultar total por mês:
-  ```bash
-  curl -X GET "http://localhost:8080/transactions/total/month?month=5&year=2026"
   ```
 
 ---
