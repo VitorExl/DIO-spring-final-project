@@ -1,85 +1,125 @@
-# DIO Spring Boot - Final Project 05: Spring AI (budgeting)
+# DIO Spring Boot - Desafio Final: Assistente Financeiro com Spring AI
 
-## Introduction
+Este repositório contém a minha entrega do desafio final da trilha de Spring Boot da DIO. O objetivo principal foi integrar recursos de inteligência artificial generativa e multimodal utilizando Spring AI em uma API de controle financeiro pessoal, respeitando a arquitetura em camadas e boas práticas de Domain-Driven Design (DDD).
 
-This final module applies Spring AI in a budgeting API while preserving the same layered architecture used across the track.
+---
 
-The goal is to integrate AI capabilities without bypassing domain and use case boundaries.
+## 1. O que o projeto faz
 
-## Code Context
+A aplicação funciona como um assistente financeiro capaz de processar comandos em linguagem natural, tanto por texto quanto por áudio. 
 
-The project processes voice commands to create and query financial transactions.
+O fluxo principal da aplicação acontece da seguinte forma:
+1. O usuário envia uma gravação de áudio com um comando de voz (por exemplo: "Gastei 50 reais no supermercado" ou "Quanto já gastei com alimentação?").
+2. O modelo Whisper da OpenAI faz a transcrição do áudio para texto em português.
+3. O Spring AI (usando ChatClient e o modelo GPT-4o-mini) interpreta a mensagem e identifica qual caso de uso deve ser chamado.
+4. O caso de uso executa a operação necessária no banco de dados, como salvar uma nova despesa ou consultar registros existentes.
+5. O texto de resposta formulado pela IA é convertido em áudio com o modelo de Text-to-Speech (TTS) da OpenAI, retornando um arquivo de áudio MP3 para o usuário.
 
-Primary flow:
+---
 
-1. Client uploads an audio file.
-2. Audio is transcribed into text.
-3. The model selects an application tool/use case.
-4. The use case persists or queries transaction data.
-5. The final response is converted to audio.
+## 2. Tecnologias utilizadas
 
-## Project Structure
+- Java 25
+- Spring Boot 4
+- Spring AI (OpenAI Starter)
+- OpenAI API (GPT-4o-mini, Whisper-1 e TTS)
+- Spring Data JPA e Hibernate
+- Banco de dados MySQL / H2
+- Lombok
+- JUnit 5 e Mockito
+- Gradle
 
-- `src/main/java/dio/budgeting/domain`
-  - Domain model and repository contract.
-- `src/main/java/dio/budgeting/application`
-  - Use cases used by both REST and AI tool calling.
-- `src/main/java/dio/budgeting/infrastructure`
-  - HTTP adapters, JPA adapters, and integration glue.
+---
 
-## Module-Specific Topics
+## 3. Melhorias implementadas
 
-### Speech-to-text
+Para evoluir a aplicação além do código base, desenvolvi as seguintes melhorias:
 
-- Uses `TranscriptionModel` for audio transcription.
-- Model settings are configured in `application.properties`.
+### Total de gastos por categoria
+Criei o caso de uso GetTotalSpentByCategoryUseCase para somar os gastos de uma categoria específica. A funcionalidade foi registrada como uma tool para que a IA possa responder perguntas diretas de soma, como "quanto gastei com alimentação?".
 
-### Tool calling
+### Total de gastos por mês e ano
+Adicionei o campo de data na entidade Transaction e criei o caso de uso GetTotalSpentByMonthUseCase. Isso permite realizar consultas temporais filtrando as transações pelo período desejado, permitindo que a IA processe comandos como "qual foi o total de gastos em maio?".
 
-- `ChatClient` registers use-case tools.
-- `@Tool` methods expose business capabilities to the model.
+### Tratamento global de erros
+Implementei uma classe de tratamento de exceções (GlobalExceptionHandler) com uma estrutura de resposta padronizada (ErrorResponse). Isso garante que requisições com áudio vazio, categorias inválidas ou parâmetros ausentes retornem mensagens claras e com os códigos HTTP adequados.
 
-### Text-to-speech
+---
 
-- `TextToSpeechModel` produces MP3 output from final text.
-- AI endpoint returns generated audio.
+## 4. Como executar a aplicação
 
-## Spring AI Documentation
+### Pré-requisitos
+- JDK 25 instalado
+- Uma chave da API da OpenAI (OPENAI_API_KEY)
 
-- Spring AI Reference: https://docs.spring.io/spring-ai/reference/index.html
-- ChatModel API: https://docs.spring.io/spring-ai/reference/api/chatmodel.html
-- ChatClient API: https://docs.spring.io/spring-ai/reference/api/chatclient.html
-- Tools API: https://docs.spring.io/spring-ai/reference/api/tools.html
-- Audio Transcriptions API: https://docs.spring.io/spring-ai/reference/api/audio/transcriptions.html
-- Audio Speech API: https://docs.spring.io/spring-ai/reference/api/audio/speech.html
+### Execução
 
-## Shared Architecture References
+1. Defina a variável de ambiente com a sua chave da OpenAI:
 
-Common architecture concepts are documented in the root README:
+   - Linux ou macOS:
+     ```bash
+     export OPENAI_API_KEY="sua-chave-aqui"
+     ```
+   - Windows (PowerShell):
+     ```powershell
+     $env:OPENAI_API_KEY="sua-chave-aqui"
+     ```
+   - Windows (CMD):
+     ```cmd
+     set OPENAI_API_KEY=sua-chave-aqui
+     ```
 
-- [DDD layers](../README.md#ddd-layered-architecture)
-- [Class vs record](../README.md#java-class-vs-java-record-in-domain-modeling)
-- [Strong typed identifiers](../README.md#strong-typed-identifiers)
-- [Repository pattern](../README.md#repository-pattern)
-- [Use cases and Clean Architecture](../README.md#use-cases-and-clean-architecture)
-- [Docker Compose support](../README.md#docker-compose-support-in-development)
+2. Execute os testes para validar o projeto:
+   ```bash
+   ./gradlew test
+   ```
 
-## How to Run
+3. Inicie o servidor:
+   ```bash
+   ./gradlew bootRun
+   ```
 
-Set your OpenAI API key:
+---
+
+## 5. Como testar o fluxo principal
+
+### Teste por áudio (Interação multimodal)
+Envie um arquivo de áudio para o endpoint de IA:
 
 ```bash
-export OPENAI_API_KEY="your_api_key_here"
+curl -X POST "http://localhost:8080/transactions/ai" \
+  -H "accept: audio/mp3" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@src/test/resources/audio/recording-1.m4a" \
+  --output resposta.mp3
 ```
 
-Run the application and tests:
+O arquivo resposta.mp3 conterá a fala da assistente respondendo ao comando do áudio.
 
-```bash
-./gradlew bootRun
-./gradlew test
-```
+### Testes via endpoints REST
+Você também pode interagir diretamente via REST para validar os dados:
 
-## Notes
+- Registrar despesa:
+  ```bash
+  curl -X POST "http://localhost:8080/transactions" \
+    -H "Content-Type: application/json" \
+    -d '{"description": "Mercado", "category": "GROCERIES", "amount": 15000}'
+  ```
 
-- Educational final project focused on AI plus architectural discipline.
-- External provider integration tests may require active credentials.
+- Consultar total por categoria:
+  ```bash
+  curl -X GET "http://localhost:8080/transactions/total/category/GROCERIES"
+  ```
+
+- Consultar total por mês:
+  ```bash
+  curl -X GET "http://localhost:8080/transactions/total/month?month=5&year=2026"
+  ```
+
+---
+
+## 6. O que aprendi durante o desafio
+
+Durante o desenvolvimento deste projeto, aprendi como conectar modelos de inteligência artificial diretamente a serviços Java usando o Spring AI. Foi muito interessante ver na prática como funciona o conceito de Tool Calling, onde o próprio modelo de linguagem decide quando acionar métodos específicos do sistema com base na intenção do usuário.
+
+Além disso, compreendi a importância de manter as fronteiras da arquitetura bem definidas: a IA atua apenas como uma camada de interação inteligente, enquanto as regras de negócio, os cálculos de valores e a persistência continuam organizados nos casos de uso e no domínio da aplicação.

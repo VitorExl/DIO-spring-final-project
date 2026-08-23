@@ -1,7 +1,11 @@
 package dio.budgeting.infrastructure.http;
 
+import dio.budgeting.application.GetTotalSpentByCategoryUseCase;
+import dio.budgeting.application.GetTotalSpentByMonthUseCase;
 import dio.budgeting.application.ListTransactionsByCategoryUseCase;
 import dio.budgeting.application.PersistTransactionUseCase;
+import dio.budgeting.application.output.CategoryTotalOutput;
+import dio.budgeting.application.output.MonthlyTotalOutput;
 import dio.budgeting.domain.Category;
 import dio.budgeting.infrastructure.http.request.TransactionRequest;
 import dio.budgeting.infrastructure.http.response.TransactionResponse;
@@ -24,6 +28,8 @@ import java.util.List;
 public class TransactionController {
     private final PersistTransactionUseCase persistTransactionUseCase;
     private final ListTransactionsByCategoryUseCase listTransactionsByCategoryUseCase;
+    private final GetTotalSpentByCategoryUseCase getTotalSpentByCategoryUseCase;
+    private final GetTotalSpentByMonthUseCase getTotalSpentByMonthUseCase;
 
     private final TranscriptionModel transcriptionModel;
     private final ChatClient chatClient;
@@ -31,16 +37,25 @@ public class TransactionController {
 
     public TransactionController(PersistTransactionUseCase persistTransactionUseCase,
                                  ListTransactionsByCategoryUseCase listTransactionsByCategoryUseCase,
+                                 GetTotalSpentByCategoryUseCase getTotalSpentByCategoryUseCase,
+                                 GetTotalSpentByMonthUseCase getTotalSpentByMonthUseCase,
                                  TranscriptionModel transcriptionModel,
                                  @Value("classpath:prompts/system-message.st") Resource systemPrompt,
                                  ChatClient.Builder chatClientBuilder,
                                  TextToSpeechModel textToSpeechModel) throws IOException {
         this.persistTransactionUseCase = persistTransactionUseCase;
         this.listTransactionsByCategoryUseCase = listTransactionsByCategoryUseCase;
+        this.getTotalSpentByCategoryUseCase = getTotalSpentByCategoryUseCase;
+        this.getTotalSpentByMonthUseCase = getTotalSpentByMonthUseCase;
         this.transcriptionModel = transcriptionModel;
         this.chatClient = chatClientBuilder
                 .defaultSystem(systemPrompt.getContentAsString(Charset.defaultCharset()))
-                .defaultTools(persistTransactionUseCase, listTransactionsByCategoryUseCase)
+                .defaultTools(
+                        persistTransactionUseCase,
+                        listTransactionsByCategoryUseCase,
+                        getTotalSpentByCategoryUseCase,
+                        getTotalSpentByMonthUseCase
+                )
                 .build();
         this.textToSpeechModel = textToSpeechModel;
     }
@@ -57,8 +72,22 @@ public class TransactionController {
         return listTransactionsByCategoryUseCase.execute(category).stream().map(TransactionResponse::from).toList();
     }
 
-    @PostMapping(value = "/ai", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = "audio/mp3")
+    @GetMapping("/total/category/{category}")
+    public CategoryTotalOutput getTotalByCategory(@PathVariable Category category) {
+        return getTotalSpentByCategoryUseCase.execute(category);
+    }
+
+    @GetMapping("/total/month")
+    public MonthlyTotalOutput getTotalByMonth(@RequestParam int month, @RequestParam int year) {
+        return getTotalSpentByMonthUseCase.execute(month, year);
+    }
+
+    @PostMapping(value = "/ai", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     ResponseEntity<Resource> transcribe(@RequestParam("file") MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("O arquivo de áudio enviado para transcrição não pode estar vazio.");
+        }
+
         var userMessage = transcriptionModel.transcribe(file.getResource());
         var result = chatClient.prompt().user(userMessage).call().content();
 
@@ -66,6 +95,7 @@ public class TransactionController {
         var resource = new ByteArrayResource(audio);
 
         return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType("audio/mp3"))
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         ContentDisposition.attachment()
                                 .filename("audio.mp3")
